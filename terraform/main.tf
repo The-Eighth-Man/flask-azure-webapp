@@ -193,7 +193,6 @@ resource "azurerm_linux_web_app" "main" {
 
   app_settings = {
     "SCM_DO_BUILD_DURING_DEPLOYMENT" = "true"
-    "WEBSITE_HTTPLOGGING_RETENTION_DAYS" = "7"
     "DB_HOST"     = azurerm_postgresql_flexible_server.main.fqdn
     "DB_NAME"     = azurerm_postgresql_flexible_server_database.main.name
     "DB_USER"     = azurerm_postgresql_flexible_server.main.administrator_login
