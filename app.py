@@ -1,11 +1,12 @@
 """
-Flask Web Application with Azure PostgreSQL Database
+Flask Web Application with Azure SQL Database
 """
 import os
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import logging
+from urllib.parse import quote_plus
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -16,12 +17,24 @@ app = Flask(__name__)
 # Database configuration
 DB_HOST = os.environ.get('DB_HOST', 'localhost')
 DB_NAME = os.environ.get('DB_NAME', 'appdb')
-DB_USER = os.environ.get('DB_USER', 'postgres')
+DB_USER = os.environ.get('DB_USER', 'adminuser')
 DB_PASSWORD = os.environ.get('DB_PASSWORD', '')
-DB_PORT = os.environ.get('DB_PORT', '5432')
+DB_PORT = os.environ.get('DB_PORT', '1433')
+DB_TYPE = os.environ.get('DB_TYPE', 'mssql')
 
-# Construct database URI
-DATABASE_URI = f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require'
+# Construct database URI for MSSQL
+params = quote_plus(
+    f"DRIVER={{ODBC Driver 18 for SQL Server}};"
+    f"SERVER={DB_HOST},{DB_PORT};"
+    f"DATABASE={DB_NAME};"
+    f"UID={DB_USER};"
+    f"PWD={DB_PASSWORD};"
+    f"Encrypt=yes;"
+    f"TrustServerCertificate=no;"
+    f"Connection Timeout=30;"
+)
+DATABASE_URI = f'mssql+pyodbc:///?odbc_connect={params}'
+
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 

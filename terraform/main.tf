@@ -94,71 +94,77 @@ resource "azurerm_subnet" "app_service" {
   }
 }
 
-# Subnet for Private Endpoints (PostgreSQL)
+# Subnet for Private Endpoints (no delegation for SQL)
 resource "azurerm_subnet" "private_endpoints" {
   name                 = "private-endpoints-subnet"
   resource_group_name  = azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = ["10.0.2.0/24"]
-
-  delegation {
-    name = "postgres-delegation"
-
-    service_delegation {
-      name    = "Microsoft.DBforPostgreSQL/flexibleServers"
-      actions = [
-        "Microsoft.Network/virtualNetworks/subnets/join/action"
-      ]
-    }
-  }
 }
 
-# Private DNS Zone for PostgreSQL
-resource "azurerm_private_dns_zone" "postgres" {
-  name                = "privatelink.postgres.database.azure.com"
+# Private DNS Zone for Azure SQL
+resource "azurerm_private_dns_zone" "sql" {
+  name                = "privatelink.database.windows.net"
   resource_group_name = azurerm_resource_group.main.name
 }
 
 # Link Private DNS Zone to VNET
-resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
-  name                  = "postgres-vnet-link"
+resource "azurerm_private_dns_zone_virtual_network_link" "sql" {
+  name                  = "sql-vnet-link"
   resource_group_name   = azurerm_resource_group.main.name
-  private_dns_zone_name = azurerm_private_dns_zone.postgres.name
+  private_dns_zone_name = azurerm_private_dns_zone.sql.name
   virtual_network_id    = azurerm_virtual_network.main.id
 }
 
-# PostgreSQL Flexible Server
-resource "azurerm_postgresql_flexible_server" "main" {
-  name                   = "${var.app_name}-postgres-${random_string.suffix.result}"
-  resource_group_name    = azurerm_resource_group.main.name
-  location               = azurerm_resource_group.main.location
-  version                = "15"
-  delegated_subnet_id    = azurerm_subnet.private_endpoints.id
-  private_dns_zone_id    = azurerm_private_dns_zone.postgres.id
-  administrator_login    = "adminuser"
-  administrator_password = var.db_admin_password
-  zone                   = "1"
+# Azure SQL Server
+resource "azurerm_mssql_server" "main" {
+  name                         = "${var.app_name}-sql-${random_string.suffix.result}"
+  resource_group_name          = azurerm_resource_group.main.name
+  location                     = azurerm_resource_group.main.location
+  version                      = "12.0"
+  administrator_login          = "adminuser"
+  administrator_login_password = var.db_admin_password
 
-  storage_mb = 32768
-  sku_name   = "B_Standard_B1ms"
-
-  backup_retention_days           = 7
-  geo_redundant_backup_enabled    = false
-  public_network_access_enabled   = false
-
-  depends_on = [azurerm_private_dns_zone_virtual_network_link.postgres]
+  public_network_access_enabled = false
 
   tags = {
     Environment = var.environment
   }
 }
 
-# PostgreSQL Database
-resource "azurerm_postgresql_flexible_server_database" "main" {
+# Azure SQL Database
+resource "azurerm_mssql_database" "main" {
   name      = "appdb"
-  server_id = azurerm_postgresql_flexible_server.main.id
-  collation = "en_US.utf8"
-  charset   = "utf8"
+  server_id = azurerm_mssql_server.main.id
+  sku_name  = "Basic"
+
+  tags = {
+    Environment = var.environment
+  }
+}
+
+# Private Endpoint for SQL Server
+resource "azurerm_private_endpoint" "sql" {
+  name                = "${var.app_name}-sql-endpoint-${random_string.suffix.result}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  subnet_id           = azurerm_subnet.private_endpoints.id
+
+  private_service_connection {
+    name                           = "sql-private-connection"
+    private_connection_resource_id = azurerm_mssql_server.main.id
+    is_manual_connection           = false
+    subresource_names              = ["sqlServer"]
+  }
+
+  private_dns_zone_group {
+    name                 = "sql-dns-zone-group"
+    private_dns_zone_ids = [azurerm_private_dns_zone.sql.id]
+  }
+
+  tags = {
+    Environment = var.environment
+  }
 }
 
 # App Service Plan
@@ -193,11 +199,12 @@ resource "azurerm_linux_web_app" "main" {
 
   app_settings = {
     "SCM_DO_BUILD_DURING_DEPLOYMENT" = "true"
-    "DB_HOST"     = azurerm_postgresql_flexible_server.main.fqdn
-    "DB_NAME"     = azurerm_postgresql_flexible_server_database.main.name
-    "DB_USER"     = azurerm_postgresql_flexible_server.main.administrator_login
+    "DB_HOST"     = azurerm_mssql_server.main.fully_qualified_domain_name
+    "DB_NAME"     = azurerm_mssql_database.main.name
+    "DB_USER"     = "${azurerm_mssql_server.main.administrator_login}@${azurerm_mssql_server.main.name}"
     "DB_PASSWORD" = var.db_admin_password
-    "DB_PORT"     = "5432"
+    "DB_PORT"     = "1433"
+    "DB_TYPE"     = "mssql"
   }
 
   virtual_network_subnet_id = azurerm_subnet.app_service.id
@@ -207,8 +214,9 @@ resource "azurerm_linux_web_app" "main" {
   }
 
   depends_on = [
-    azurerm_postgresql_flexible_server.main,
-    azurerm_postgresql_flexible_server_database.main
+    azurerm_mssql_server.main,
+    azurerm_mssql_database.main,
+    azurerm_private_endpoint.sql
   ]
 }
 
@@ -223,14 +231,20 @@ output "app_service_url" {
   description = "URL of the App Service"
 }
 
-output "postgres_server_name" {
-  value       = azurerm_postgresql_flexible_server.main.name
-  description = "Name of the PostgreSQL server"
+output "sql_server_name" {
+  value       = azurerm_mssql_server.main.name
+  description = "Name of the SQL Server"
 }
 
-output "postgres_server_fqdn" {
-  value       = azurerm_postgresql_flexible_server.main.fqdn
-  description = "FQDN of the PostgreSQL server"
+output "sql_server_fqdn" {
+  value       = azurerm_mssql_server.main.fully_qualified_domain_name
+  description = "FQDN of the SQL Server"
+  sensitive   = true
+}
+
+output "private_endpoint_ip" {
+  value       = azurerm_private_endpoint.sql.private_service_connection[0].private_ip_address
+  description = "Private IP address of the SQL Server endpoint"
   sensitive   = true
 }
 
