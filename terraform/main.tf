@@ -134,9 +134,11 @@ resource "azurerm_mssql_server" "main" {
 
 # Azure SQL Database
 resource "azurerm_mssql_database" "main" {
-  name      = "appdb"
-  server_id = azurerm_mssql_server.main.id
-  sku_name  = "Basic"
+  name                        = "appdb"
+  server_id                   = azurerm_mssql_server.main.id
+  sku_name                    = "Basic"
+  geo_backup_enabled          = false
+  zone_redundant              = false
 
   tags = {
     Environment = var.environment
