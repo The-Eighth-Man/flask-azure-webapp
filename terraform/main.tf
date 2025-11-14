@@ -131,8 +131,9 @@ resource "azurerm_postgresql_flexible_server" "main" {
   storage_mb = 32768
   sku_name   = "B_Standard_B1ms"
 
-  backup_retention_days        = 7
-  geo_redundant_backup_enabled = false
+  backup_retention_days           = 7
+  geo_redundant_backup_enabled    = false
+  public_network_access_enabled   = false
 
   depends_on = [azurerm_private_dns_zone_virtual_network_link.postgres]
 
@@ -147,14 +148,6 @@ resource "azurerm_postgresql_flexible_server_database" "main" {
   server_id = azurerm_postgresql_flexible_server.main.id
   collation = "en_US.utf8"
   charset   = "utf8"
-}
-
-# PostgreSQL Firewall Rule (for VNET only)
-resource "azurerm_postgresql_flexible_server_firewall_rule" "vnet" {
-  name             = "allow-vnet"
-  server_id        = azurerm_postgresql_flexible_server.main.id
-  start_ip_address = "10.0.0.0"
-  end_ip_address   = "10.0.255.255"
 }
 
 # App Service Plan
