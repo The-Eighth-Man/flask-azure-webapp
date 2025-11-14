@@ -137,7 +137,7 @@ resource "azurerm_mssql_database" "main" {
   name                        = "appdb"
   server_id                   = azurerm_mssql_server.main.id
   sku_name                    = "Basic"
-  geo_backup_enabled          = false
+  storage_account_type        = "Local"
   zone_redundant              = false
 
   tags = {
