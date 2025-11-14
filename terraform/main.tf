@@ -94,12 +94,23 @@ resource "azurerm_subnet" "app_service" {
   }
 }
 
-# Subnet for Private Endpoints
+# Subnet for Private Endpoints (PostgreSQL)
 resource "azurerm_subnet" "private_endpoints" {
   name                 = "private-endpoints-subnet"
   resource_group_name  = azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = ["10.0.2.0/24"]
+
+  delegation {
+    name = "postgres-delegation"
+
+    service_delegation {
+      name    = "Microsoft.DBforPostgreSQL/flexibleServers"
+      actions = [
+        "Microsoft.Network/virtualNetworks/subnets/join/action"
+      ]
+    }
+  }
 }
 
 # Private DNS Zone for PostgreSQL
