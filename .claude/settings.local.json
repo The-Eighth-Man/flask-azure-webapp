@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(az group list:*)",
+      "Bash(chmod:*)",
+      "Bash(tree:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

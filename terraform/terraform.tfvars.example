@@ -1,0 +1,10 @@
+# Terraform Variables Configuration
+# Copy this file to terraform.tfvars and update the values
+
+resource_group_name = "flask-app-rg"
+location            = "mexicocentral"
+app_name            = "flask-webapp"
+environment         = "production"
+
+# Set this as an environment variable or in terraform.tfvars (not committed to git)
+# db_admin_password = "YourSecurePassword123!"
